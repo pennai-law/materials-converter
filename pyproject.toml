@@ -37,4 +37,6 @@ materials-convert = "convert:main"
 
 [tool.setuptools]
 packages = ["materials", "materials.core", "materials.formats"]
-py-modules = ["convert"]
+# `console` provides the optional Rich UX layer; it must ship or a pip-installed
+# `materials-convert` silently loses all progress bars/panels (RICH_AVAILABLE=False).
+py-modules = ["convert", "console"]

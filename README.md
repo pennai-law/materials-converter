@@ -298,7 +298,9 @@ Batch conversions show overall progress and a comprehensive summary:
 
 ### JSON Report
 
-Use `--save-report` to generate a detailed JSON file with per-file statistics:
+Use `--save-report` to generate a detailed JSON file with per-file statistics. The
+report is written as `conversion_report.json` in the output directory (or the input
+directory when no `-o` is given), on both the serial and parallel (`--workers N`) paths:
 ```json
 {
   "summary": {

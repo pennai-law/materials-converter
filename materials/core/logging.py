@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 
@@ -47,6 +48,9 @@ def setup_logging(
         logger.addHandler(console_handler)
 
     if log_file:
+        # Create the log file's parent directory if it doesn't exist yet —
+        # otherwise FileHandler raises FileNotFoundError before any work runs.
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging.Formatter(

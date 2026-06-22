@@ -1476,7 +1476,13 @@ class PDFConverter(BaseConverter):
         Parallel path: delegate to BaseConverter.convert_directory which uses
         ProcessPoolExecutor; per-worker warmup is paid up front.
         """
-        if workers > 1:
+        # The legacy serial batch (batch_convert_directory) only honors
+        # page_markers/save_report/recursive. If the caller set per-file flags
+        # it can't apply (ocr, pages), fall back to the options-aware base path
+        # so those flags aren't silently dropped. Correctness over the
+        # warmed-model speed trick.
+        needs_options_aware = options is not None and (options.ocr or options.pages)
+        if workers > 1 or needs_options_aware:
             return super().convert_directory(
                 input_dir, output_dir=output_dir, recursive=recursive,
                 save_report=save_report, page_markers=page_markers, workers=workers,

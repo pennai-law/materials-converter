@@ -164,6 +164,13 @@ def parallel_convert_files(
     logger.info(
         f"Parallel batch complete: {success_count} succeeded, {error_count} failed"
     )
+
+    if options.save_report:
+        from materials.core.report import write_conversion_report
+        target_dir = options.output_path or input_dir or "."
+        report_path = write_conversion_report(reports, target_dir)
+        logger.info(f"Detailed report saved to: {report_path}")
+
     return {
         "success_count": success_count,
         "error_count": error_count,

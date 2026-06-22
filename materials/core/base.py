@@ -162,7 +162,13 @@ class BaseConverter(ABC):
             out_override = None
             if output_dir:
                 out_override = str(Path(output_dir) / Path(src).with_suffix(".md").name)
-            opts = ConversionOptions(output_path=out_override, page_markers=page_markers)
+            if options is not None:
+                # Forward the caller's full options (ocr, full, notes_only,
+                # show_revisions, keep_images, strip_html_noise, pages, …),
+                # overriding only the per-file output path.
+                opts = replace(options, output_path=out_override)
+            else:
+                opts = ConversionOptions(output_path=out_override, page_markers=page_markers)
             result = self.convert(src, opts)
             if result.status == "success":
                 success_count += 1
