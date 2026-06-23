@@ -18,7 +18,7 @@ from typing import Optional
 # installed (or `console.py` is unavailable for any reason), converters fall
 # back to plain logging output. The detection happens once at import time.
 try:
-    import console  # noqa: F401 — only imported to test availability
+    import materials.console  # noqa: F401 — only imported to test availability
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False

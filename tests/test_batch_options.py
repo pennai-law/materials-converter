@@ -81,6 +81,34 @@ def test_write_conversion_report(tmp_path):
     assert len(data["files"]) == 2
 
 
+def test_materials_console_importable():
+    """Bug 6 (relocation): the Rich UX layer lives in the package now."""
+    from materials.console import console, print_batch_summary  # noqa: F401
+
+    assert console is not None
+
+
+def test_dispatch_batch_writes_single_report_for_non_pdf(tmp_path, monkeypatch):
+    """Bug 5 (consolidation): report-writing is centralized in _dispatch_batch,
+    so even a non-PDF serial batch produces one conversion_report.json."""
+    import materials.cli as cli
+
+    _make_files(tmp_path, n=2)
+    out_dir = tmp_path / "out"
+
+    monkeypatch.setattr(cli, "REGISTRY", {".rec": _RecordingConverter()})
+    args = cli._build_parser().parse_args(
+        [str(tmp_path), "--batch", "--save-report", "-o", str(out_dir)]
+    )
+    rc = cli._dispatch_batch(str(tmp_path), args)
+
+    report = out_dir / "conversion_report.json"
+    assert rc == 0
+    assert report.exists(), "central report writer did not run"
+    data = json.loads(report.read_text())
+    assert data["summary"]["files_processed"] == 2
+
+
 def test_pdf_batch_with_ocr_delegates_to_options_aware_path(tmp_path, monkeypatch):
     """Bug 1 (PDF path): with ocr/pages set, the serial PDF batch must use the
     options-aware base path, not the legacy batch that ignores those flags."""

@@ -33,10 +33,11 @@ Homepage = "https://github.com/ai-teaching-lab/materials-converter"
 Repository = "https://github.com/ai-teaching-lab/materials-converter"
 
 [project.scripts]
-materials-convert = "convert:main"
+materials-convert = "materials.cli:main"
 
 [tool.setuptools]
 packages = ["materials", "materials.core", "materials.formats"]
-# `console` provides the optional Rich UX layer; it must ship or a pip-installed
-# `materials-convert` silently loses all progress bars/panels (RICH_AVAILABLE=False).
-py-modules = ["convert", "console"]
+# Everything ships inside the `materials` package — including the CLI
+# (`materials.cli`) and the Rich UX layer (`materials.console`). The repo-root
+# convert.py / console.py are dev/back-compat shims and are deliberately NOT
+# installed, so the distribution adds no top-level modules to site-packages.

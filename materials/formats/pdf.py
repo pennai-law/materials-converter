@@ -28,7 +28,7 @@ except ImportError:
     RAPIDFUZZ_AVAILABLE = False
 
 try:
-    from console import (
+    from materials.console import (
         console, ConversionProgress, print_header,
         print_conversion_report as rich_print_report,
         print_batch_summary, print_success, print_warning, print_error,
@@ -405,7 +405,7 @@ def batch_convert_directory(
 
     if use_rich:
         suppress_docling_logging()
-        from console import console, print_batch_summary
+        from materials.console import console, print_batch_summary
         from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
         from rich.panel import Panel
         from rich.table import Table
