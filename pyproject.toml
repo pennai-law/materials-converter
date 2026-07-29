@@ -9,7 +9,7 @@ description = "Convert PDF, DOCX, PPTX, and HTML to clean, AI-ingestion-ready ma
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-authors = [{ name = "AI Teaching Lab, Penn Carey Law" }]
+authors = [{ name = "Penn Carey Law AI Project" }]
 keywords = ["markdown", "pdf", "docx", "pptx", "document-conversion", "docling", "ai"]
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
