@@ -2,7 +2,7 @@
 
 Convert PDF, DOCX, PPTX, and HTML files to markdown format optimized for AI tools, using **Docling** — IBM Research's document understanding library.
 
-Part of the [Penn Carey Law AI Teaching Lab](https://github.com/ai-teaching-lab) (Teaching Tools).
+Part of the [Penn Carey Law AI Teaching Lab](https://github.com/pennai-law) (Teaching Tools).
 
 ## Features
 
@@ -25,10 +25,10 @@ Part of the [Penn Carey Law AI Teaching Lab](https://github.com/ai-teaching-lab)
 
 ```bash
 # Install directly from GitHub (recommended)
-pip install git+https://github.com/ai-teaching-lab/materials-converter
+pip install git+https://github.com/pennai-law/materials-converter
 
 # Or, for development, clone and install in editable mode
-git clone https://github.com/ai-teaching-lab/materials-converter
+git clone https://github.com/pennai-law/materials-converter
 cd materials-converter
 pip install -e ".[test]"
 ```

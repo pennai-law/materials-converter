@@ -29,8 +29,8 @@ dependencies = [
 test = ["pytest>=8.0.0", "reportlab>=4.0.0"]
 
 [project.urls]
-Homepage = "https://github.com/ai-teaching-lab/materials-converter"
-Repository = "https://github.com/ai-teaching-lab/materials-converter"
+Homepage = "https://github.com/pennai-law/materials-converter"
+Repository = "https://github.com/pennai-law/materials-converter"
 
 [project.scripts]
 materials-convert = "materials.cli:main"
