@@ -13,7 +13,20 @@ The project runs in a venv at `./venv/`. There is no `pip install -e .` — scri
 ```bash
 ./venv/bin/python convert.py ...              # main converter (PDF, DOCX, PPTX, HTML)
 ./venv/bin/python verify_cli.py ...           # verifier CLI with `content` and `markers` subcommands
-./venv/bin/python -m pytest tests/            # test suite (new in stage 1)
+./venv/bin/python -m pytest tests/            # test suite
+```
+
+**The test suite requires the reference dependency versions** (see below).
+`convert.py` runs fine on newer ones, but the pinned goldens were generated
+against docling 2.65.0, so a newer docling makes the golden and PPTX-notes
+tests fail on legitimate output differences. If your venv has drifted, either
+recreate it at the reference versions or keep a second venv pinned there:
+
+```bash
+python3 -m venv venv-ref
+./venv-ref/bin/pip install 'docling==2.65.0' 'pymupdf==1.26.7' \
+    'rapidfuzz==3.14.3' 'rich==14.2.0' -r requirements.txt
+./venv-ref/bin/pip install 'pytest>=8.0.0' 'reportlab>=4.0.0'   # test extras
 ```
 
 If you create the venv from scratch:
@@ -23,7 +36,34 @@ python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
-There is no linter config and no build step. `requirements.txt` pins minimum versions only (`docling>=2.0.0`, etc.) — the actual versions in the venv are 2.65.0 / 1.26.7 / 3.14.3 / 14.2.0 as of last update. A pytest test suite was added in stage 1 (see the Tests subsection under Architecture).
+There is no linter config and no build step. `requirements.txt` pins minimum versions only (`docling>=2.0.0`, etc.) — the reference versions, which the goldens were generated against, are docling 2.65.0 / pymupdf 1.26.7 / rapidfuzz 3.14.3 / rich 14.2.0. Those are the versions in the `pdf-converter/venv` above. A pytest test suite was added in stage 1 (see the Tests subsection under Architecture).
+
+### Pending: docling upgrade
+
+A venv built from `requirements.txt` today resolves to docling 2.107.0 / pymupdf 1.27.2.3 / rapidfuzz 3.14.5 / rich 15.0.0, because the file pins minimums only. Measured on 2026-08-04, the suite there gives **9 failed / 68 passed** — all six `tests/test_pdf.py` tests and three `tests/test_pptx.py` speaker-notes tests:
+
+```
+test_pdf.py::test_new_matches_golden                      AssertionError
+test_pdf.py::test_legacy_matches_golden                   FileNotFoundError
+test_pdf.py::test_fixture_unchanged_after_conversion      AssertionError
+test_pdf.py::test_outline_pdf_gets_nested_headings        AssertionError
+test_pdf.py::test_no_outline_headings_flag_disables_releveling
+test_pdf.py::test_no_empty_headings_in_output             AssertionError
+test_pptx.py::test_pptx_speaker_notes_present_for_notes_slides
+test_pptx.py::test_pptx_speaker_notes_marker_only_for_notes_slides
+test_pptx.py::test_pptx_notes_only_skips_bullet_content
+```
+
+The same tests pass 77/77 under the reference versions, so this is docling output drift, not broken code — the pinned-golden guard doing its job. Note 2.107 also pulls in a RapidOCR/torch path that the 2.65.0 baseline did not, so the delta is larger than markdown formatting alone.
+
+**Accepting the upgrade is a deliberate decision, not a bug fix**, and it means:
+
+1. Reviewing the golden diff to confirm every change is an intended docling improvement.
+2. Regenerating `tests/fixtures/sample.golden.md` (the maintained path's golden) — **never** `sample.legacy.golden.md`, which is frozen alongside the frozen snapshot.
+3. Re-checking the PPTX notes path: `materials/formats/pptx.py` relies on docling extracting speaker notes into `ContentLayer.FURNITURE`, behaviour introduced in 2.65.0 and possibly changed since.
+4. Re-running the outline-heading feature against a real book — it scored 616/618 on a 524-page casebook under 2.65.0.
+
+Until someone does that work, use the `pdf-converter/venv` for tests.
 
 ## Common commands
 
