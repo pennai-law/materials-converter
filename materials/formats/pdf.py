@@ -14,7 +14,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # === Third-party (kept identical to the snapshot) ===
 from docling.document_converter import DocumentConverter
@@ -48,10 +48,17 @@ from materials.core.base import BaseConverter, ConversionOptions, ConversionResu
 # PDF-specific). Re-exported here for the legacy convert_pdf_to_markdown call
 # sites that reference it via `setup_logging(...)` directly.
 from materials.core.logging import setup_logging  # noqa: F401 — re-export
+from materials.core.mdclean import unescape_entities, drop_empty_headings
+from materials.formats.pdf_outline import apply_heading_levels
 
 
 # ============================================================================
-# === BEGIN: bodies moved verbatim from the legacy snapshot (do NOT modify) ==
+# === BEGIN: bodies moved from the legacy snapshot ===========================
+# Treat as frozen EXCEPT where a change is deliberate and recorded here.
+# Sanctioned deviations from the snapshot:
+#   * 2026-08-04 - convert_pdf_to_markdown gained `outline_headings` and calls
+#     postprocess_markdown() on both write paths. The snapshot is pinned to
+#     tests/fixtures/sample.legacy.golden.md; this path to sample.golden.md.
 # ============================================================================
 # The 16 functions below are pasted unchanged from
 # tests/fixtures/legacy_pdf_to_markdown.py, in this order:
@@ -88,6 +95,10 @@ def print_conversion_report(report: Dict, logger: logging.Logger = None):
         output.append(f"  Words:      {stats['words']:,}")
         output.append(f"  Characters: {stats['characters']:,}")
         output.append(f"  Headings:   {stats['headings']}")
+        if stats.get('outline_entries'):
+            output.append(
+                f"  Outline:    {stats['outline_located']}/{stats['outline_entries']} leveled"
+            )
         output.append(f"  Tables:     {stats['tables']}")
         output.append(f"")
         output.append(f"Output:       {Path(report['output_file']).name}")
@@ -111,6 +122,7 @@ def convert_pdf_to_markdown(
     ocr: bool = False,
     report: bool = True,
     page_markers: bool = True,
+    outline_headings: bool = True,
     logger: logging.Logger = None,
     quiet: bool = False,
     converter: Optional['DocumentConverter'] = None,
@@ -126,6 +138,8 @@ def convert_pdf_to_markdown(
         extract_images: Whether to extract and save images (default: False for text-only)
         ocr: Whether to use OCR for scanned documents (default: False)
         page_markers: Whether to add page number markers to output (default: True)
+        outline_headings: Rebuild heading levels from the PDF outline when one
+            exists (default: True). No-op for PDFs without an outline.
         quiet: Suppress visual output (default: False)
         converter: Optional pre-initialized DocumentConverter (for batch efficiency)
         pdf_info: Optional pre-computed PDF info dict with keys: page_count, first_page,
@@ -201,6 +215,7 @@ def convert_pdf_to_markdown(
             converter = DocumentConverter()
 
         # Phase 1: Convert PDF with Docling
+        outline_stats = {}
         if use_rich:
             with ConversionProgress(pdf_path, str(output_path), page_count_preview, file_size,
                                    first_page_preview, last_page_preview, quiet) as progress:
@@ -216,8 +231,14 @@ def convert_pdf_to_markdown(
                         md_text = add_page_markers(md_text, pdf_path, result.document, logger,
                                                   progress_callback=update if page_count > 100 else None)
 
-                # Phase 3: Write output
+                # Phase 3: Post-process and write output
                 with progress.phase("Writing output..."):
+                    md_text, outline_stats = postprocess_markdown(
+                        md_text, pdf_path,
+                        outline_headings=outline_headings,
+                        have_page_markers=page_markers and not pages,
+                        logger=logger,
+                    )
                     pdf_name = Path(pdf_path).name
                     header = f"# {Path(pdf_path).stem}\n\n"
                     header += f"*Converted from: {pdf_name}*\n\n"
@@ -234,6 +255,13 @@ def convert_pdf_to_markdown(
 
             if page_markers:
                 md_text = add_page_markers(md_text, pdf_path, result.document, logger)
+
+            md_text, outline_stats = postprocess_markdown(
+                md_text, pdf_path,
+                outline_headings=outline_headings,
+                have_page_markers=page_markers and not pages,
+                logger=logger,
+            )
 
             pdf_name = Path(pdf_path).name
             header = f"# {Path(pdf_path).stem}\n\n"
@@ -290,6 +318,8 @@ def convert_pdf_to_markdown(
                 'headings': len(headings),
                 'tables': len(tables),
                 'pages_marked': pages_marked,
+                'outline_entries': outline_stats.get('outline_entries', 0),
+                'outline_located': outline_stats.get('outline_located', 0),
             }
         }
 
@@ -1438,6 +1468,38 @@ def add_page_markers(md_text: str, pdf_path: str, doc=None, logger: logging.Logg
 # ============================================================================
 
 
+def postprocess_markdown(
+    md_text: str,
+    pdf_path: str,
+    outline_headings: bool = True,
+    have_page_markers: bool = True,
+    logger: logging.Logger = None,
+) -> Tuple[str, Dict]:
+    """Clean Docling's markdown and restore true heading levels.
+
+    Order matters: entities are unescaped first so outline matching compares
+    '&' against '&', not '&' against '&amp;'.
+
+    Outline re-leveling needs page markers to build its line->page map, so it
+    is skipped when markers are disabled or the document was page-subset —
+    in both cases the outline's page numbers no longer describe the output.
+    """
+    md_text = unescape_entities(md_text)
+    md_text = drop_empty_headings(md_text)
+    stats: Dict = {}
+    if outline_headings and have_page_markers:
+        try:
+            md_text, stats = apply_heading_levels(md_text, pdf_path, logger=logger)
+        except Exception as exc:
+            if logger:
+                logger.warning(
+                    "Outline heading reconstruction skipped (%s); "
+                    "markdown is unchanged", exc,
+                )
+            stats = {}
+    return md_text, stats
+
+
 class PDFConverter(BaseConverter):
     """Convert PDF files to markdown using Docling + PyMuPDF + RapidFuzz."""
 
@@ -1453,6 +1515,7 @@ class PDFConverter(BaseConverter):
                 extract_images=options.extract_images,
                 ocr=options.ocr,
                 page_markers=options.page_markers,
+                outline_headings=options.outline_headings,
                 quiet=options.quiet,
                 logger=logger,
             )
@@ -1481,7 +1544,9 @@ class PDFConverter(BaseConverter):
         # it can't apply (ocr, pages), fall back to the options-aware base path
         # so those flags aren't silently dropped. Correctness over the
         # warmed-model speed trick.
-        needs_options_aware = options is not None and (options.ocr or options.pages)
+        needs_options_aware = options is not None and (
+            options.ocr or options.pages or not options.outline_headings
+        )
         if workers > 1 or needs_options_aware:
             return super().convert_directory(
                 input_dir, output_dir=output_dir, recursive=recursive,

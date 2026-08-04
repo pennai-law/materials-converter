@@ -1,14 +1,17 @@
 """PDF conversion tests — guards against regressions in the byte-identical
 output that Stage 1's refactor was specified to preserve.
 
-Pinned-golden pattern: the canonical reference is `tests/fixtures/sample.golden.md`,
-generated once on Docling 2.65.0 at Stage 1 completion and committed. Both the
-new `convert.py` path and the frozen legacy snapshot must produce output that
-matches the golden. When Docling upgrades and produces different output, the
-golden is regenerated as a deliberate, reviewable acceptance — turning a
-silent identity comparison into an explicit regression guard.
+Pinned-golden pattern: two goldens, each pinned to a different code path.
+`tests/fixtures/sample.golden.md` tracks the maintained `convert.py` path,
+generated once on Docling 2.65.0 at Stage 1 completion and committed. When
+Docling upgrades or a deliberate output change lands, it is regenerated as
+a reviewable acceptance — turning a silent identity comparison into an
+explicit regression guard. `tests/fixtures/sample.legacy.golden.md` tracks
+the frozen legacy snapshot (`tests/fixtures/legacy_pdf_to_markdown.py`) and
+is itself frozen: it is never regenerated. A divergence there means the
+snapshot was edited, not that the golden is stale — revert the edit instead.
 
-Regenerate the golden with:
+Regenerate the maintained golden with:
     ./venv/bin/python convert.py tests/fixtures/sample.pdf -o tests/fixtures/sample.golden.md
 """
 import difflib
@@ -24,6 +27,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "sample.pdf"
 GOLDEN = REPO_ROOT / "tests" / "fixtures" / "sample.golden.md"
+LEGACY_GOLDEN = REPO_ROOT / "tests" / "fixtures" / "sample.legacy.golden.md"
 
 
 def _isolated_fixture(tmpdir: Path) -> Path:
@@ -70,23 +74,38 @@ def _convert_via_new(tmpdir: Path) -> Path:
     return out
 
 
-def _diff_against_golden(produced_path: Path, label: str) -> None:
-    """Assert produced output matches the golden, with a useful diff on failure."""
+def _diff_against_golden(
+    produced_path: Path,
+    label: str,
+    golden_path: Path = GOLDEN,
+    remedy: str = None,
+) -> None:
+    """Assert produced output matches the given golden, with a useful diff on failure.
+
+    `remedy` is the guidance printed on failure. It differs per golden: the
+    maintained path's golden is regenerated on a deliberate change, while the
+    legacy golden is frozen and must never be regenerated — a divergence there
+    means the frozen snapshot itself was edited.
+    """
     produced = produced_path.read_bytes()
-    golden = GOLDEN.read_bytes()
+    golden = golden_path.read_bytes()
     if produced == golden:
         return
+    if remedy is None:
+        remedy = (
+            "If this is intentional (Docling upgrade or deliberate behavior "
+            "change), regenerate with:\n"
+            "  ./venv/bin/python convert.py tests/fixtures/sample.pdf "
+            f"-o tests/fixtures/{golden_path.name}"
+        )
     produced_lines = produced.decode("utf-8", errors="replace").splitlines()
     golden_lines = golden.decode("utf-8", errors="replace").splitlines()
     diff = "\n".join(difflib.unified_diff(
         golden_lines, produced_lines,
-        fromfile="golden", tofile=label, lineterm="", n=2,
+        fromfile=golden_path.name, tofile=label, lineterm="", n=2,
     ))
     pytest.fail(
-        f"{label} diverged from golden. If this is intentional (Docling upgrade or "
-        f"deliberate behavior change), regenerate with:\n"
-        f"  ./venv/bin/python convert.py tests/fixtures/sample.pdf "
-        f"-o tests/fixtures/sample.golden.md\n\n"
+        f"{label} diverged from {golden_path.name}.\n{remedy}\n\n"
         f"Diff (first 60 lines):\n{diff[:6000]}"
     )
 
@@ -102,14 +121,24 @@ def test_new_matches_golden(tmp_path):
 
 
 def test_legacy_matches_golden(tmp_path):
-    """The frozen legacy snapshot must also match the golden. This is a sanity
-    check against accidental drift in the snapshot itself: if someone edits
-    `tests/fixtures/legacy_pdf_to_markdown.py`, this test catches it. Together
-    with test_new_matches_golden, both code paths are pinned to the same
-    reference output, so the migration claim of byte-identity is durable
-    even when Docling versions change."""
+    """The frozen legacy snapshot must match ITS OWN pinned golden.
+
+    The snapshot is frozen forever, so it gets a frozen reference. This
+    catches accidental edits to `tests/fixtures/legacy_pdf_to_markdown.py`.
+    It deliberately no longer shares a golden with the maintained path:
+    that path now applies markdown cleanup and outline-based heading levels,
+    which the snapshot does not and never will."""
     produced = _convert_via_legacy(tmp_path)
-    _diff_against_golden(produced, "legacy snapshot")
+    _diff_against_golden(
+        produced, "legacy snapshot", LEGACY_GOLDEN,
+        remedy=(
+            "DO NOT regenerate this golden. The legacy snapshot is frozen, so "
+            "this test can only fail if tests/fixtures/legacy_pdf_to_markdown.py "
+            "was edited — revert that edit instead. Regenerating this file from "
+            "convert.py would overwrite the frozen reference with the maintained "
+            "path's output and destroy what this test guards."
+        ),
+    )
 
 
 def test_fixture_unchanged_after_conversion(tmp_path):
@@ -120,3 +149,45 @@ def test_fixture_unchanged_after_conversion(tmp_path):
     _convert_via_new(tmp_path)
     after = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
     assert before == after, "Source fixture was mutated during a conversion"
+
+
+OUTLINE_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "sample_outline.pdf"
+
+
+def test_outline_pdf_gets_nested_headings(tmp_path):
+    """A PDF with an outline must produce nested heading levels, not flat '##'."""
+    dest = tmp_path / OUTLINE_FIXTURE.name
+    shutil.copy(OUTLINE_FIXTURE, dest)
+    out = tmp_path / "outline.md"
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "convert.py"), str(dest), "-o", str(out)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = out.read_text(encoding="utf-8")
+    assert "## CHAPTER 1: Beginnings" in text
+    assert "### A. First Section" in text
+    assert "#### 1. A Subsection" in text
+
+
+def test_no_outline_headings_flag_disables_releveling(tmp_path):
+    dest = tmp_path / OUTLINE_FIXTURE.name
+    shutil.copy(OUTLINE_FIXTURE, dest)
+    out = tmp_path / "flat.md"
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "convert.py"), str(dest),
+         "--no-outline-headings", "-o", str(out)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = out.read_text(encoding="utf-8")
+    assert "### A. First Section" not in text
+    assert "## A. First Section" in text   # still present, just not re-leveled
+
+
+def test_no_empty_headings_in_output(tmp_path):
+    """The empty-heading cleanup must apply to the standard fixture."""
+    produced = _convert_via_new(tmp_path)
+    text = produced.read_text(encoding="utf-8")
+    empties = [ln for ln in text.split("\n") if ln.strip() and set(ln.strip()) == {"#"}]
+    assert empties == [], f"empty headings survived: {empties}"

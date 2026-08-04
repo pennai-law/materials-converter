@@ -161,6 +161,16 @@ def print_conversion_report(report: Dict, show_file_path: bool = True):
                     markers_str += f" ({blank_pages} blank, {unmarked - blank_pages} other)"
             table.add_row("Page Markers", markers_str)
 
+        # Only meaningful for PDFs that carry an outline; absent or zero for
+        # the ~60% of book-length PDFs that don't, and for non-PDF formats.
+        if stats.get('outline_entries'):
+            located = stats.get('outline_located', 0)
+            outline_str = f"{located:,} / {stats['outline_entries']:,} leveled"
+            unlocated = stats['outline_entries'] - located
+            if unlocated > 0:
+                outline_str += f" ({unlocated} not found)"
+            table.add_row("Outline", outline_str)
+
         # Build panel content
         panel = Panel(
             table,
