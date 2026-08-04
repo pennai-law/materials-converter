@@ -182,6 +182,7 @@ def test_no_outline_headings_flag_disables_releveling(tmp_path):
     assert result.returncode == 0, result.stderr
     text = out.read_text(encoding="utf-8")
     assert "### A. First Section" not in text
+    assert "## A. First Section" in text   # still present, just not re-leveled
 
 
 def test_no_empty_headings_in_output(tmp_path):
