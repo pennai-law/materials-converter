@@ -45,3 +45,6 @@ conversion.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Internal implementation plans — not published
+docs/superpowers/
