@@ -6,6 +6,14 @@ outline-based heading reconstruction. This builds a 3-page document with a
 
 Regenerate with:
     "$PY" tests/fixtures/build/build_outline_pdf.py
+
+Regeneration is NOT byte-reproducible. ReportLab stamps /CreationDate and
+/ModDate, and fitz.saveIncr() writes a fresh /ID in the incremental trailer,
+so re-running this produces a different file even when the content is
+identical. ReportLab's invariant=1 option does not help — it narrows the
+delta but fitz re-adds metadata afterwards (measured: 30 differing bytes
+with the flag, 122 without). Regenerate only when the fixture's CONTENT
+must change, and expect the binary diff.
 """
 from pathlib import Path
 
