@@ -149,3 +149,44 @@ def test_fixture_unchanged_after_conversion(tmp_path):
     _convert_via_new(tmp_path)
     after = hashlib.sha256(FIXTURE.read_bytes()).hexdigest()
     assert before == after, "Source fixture was mutated during a conversion"
+
+
+OUTLINE_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "sample_outline.pdf"
+
+
+def test_outline_pdf_gets_nested_headings(tmp_path):
+    """A PDF with an outline must produce nested heading levels, not flat '##'."""
+    dest = tmp_path / OUTLINE_FIXTURE.name
+    shutil.copy(OUTLINE_FIXTURE, dest)
+    out = tmp_path / "outline.md"
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "convert.py"), str(dest), "-o", str(out)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = out.read_text(encoding="utf-8")
+    assert "## CHAPTER 1: Beginnings" in text
+    assert "### A. First Section" in text
+    assert "#### 1. A Subsection" in text
+
+
+def test_no_outline_headings_flag_disables_releveling(tmp_path):
+    dest = tmp_path / OUTLINE_FIXTURE.name
+    shutil.copy(OUTLINE_FIXTURE, dest)
+    out = tmp_path / "flat.md"
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "convert.py"), str(dest),
+         "--no-outline-headings", "-o", str(out)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = out.read_text(encoding="utf-8")
+    assert "### A. First Section" not in text
+
+
+def test_no_empty_headings_in_output(tmp_path):
+    """The empty-heading cleanup must apply to the standard fixture."""
+    produced = _convert_via_new(tmp_path)
+    text = produced.read_text(encoding="utf-8")
+    empties = [ln for ln in text.split("\n") if ln.strip() and set(ln.strip()) == {"#"}]
+    assert empties == [], f"empty headings survived: {empties}"

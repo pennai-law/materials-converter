@@ -34,6 +34,7 @@ class ConversionOptions:
     notes_only: bool = False  # PPTX: emit speaker-notes transcript only
     strip_html_noise: bool = False  # HTML: bs4 nav/script pre-strip
     workers: int = 1  # Batch mode: parallel worker processes (1 = serial)
+    outline_headings: bool = True  # PDF: rebuild heading levels from the outline
 
 
 @dataclass
