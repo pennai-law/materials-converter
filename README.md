@@ -133,6 +133,11 @@ When a PDF carries a native outline (bookmark tree) — common for documents cre
 - ✗ PDFs created by scanning (no outline) — outline relabeling is skipped automatically
 - ✗ PDFs without outlines (~60% of book-length PDFs) — output is unchanged
 
+Re-leveling is also skipped when `--pages` or `--no-page-markers` is used. Both
+break the page alignment the matcher depends on: the outline's page numbers
+describe the whole document, so they no longer correspond to a page-subset or
+marker-less output.
+
 **Opt out if needed:**
 
 ```bash
@@ -150,7 +155,8 @@ This is useful when:
 On tested documents:
 - 524-page textbook: **99.7%** of outline entries located (616/618)
 - Heading levels correctly recovered: 23 chapters (##), hundreds of sections (###-######)
-- No false positives: page windows and monotonic matching prevent matching the wrong sections
+- Two entries (0.3%) were not located and fall back to their parent section; no text is lost
+- False matches are suppressed by three constraints — a page window, strictly forward-only matching, and requiring a candidate's trailing text to look like a page number rather than prose. They are not eliminated: a heading whose text also opens a body paragraph on the same page can still mismatch.
 
 ### Extract Images
 
