@@ -24,6 +24,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "sample.pdf"
 GOLDEN = REPO_ROOT / "tests" / "fixtures" / "sample.golden.md"
+LEGACY_GOLDEN = REPO_ROOT / "tests" / "fixtures" / "sample.legacy.golden.md"
 
 
 def _isolated_fixture(tmpdir: Path) -> Path:
@@ -70,23 +71,23 @@ def _convert_via_new(tmpdir: Path) -> Path:
     return out
 
 
-def _diff_against_golden(produced_path: Path, label: str) -> None:
-    """Assert produced output matches the golden, with a useful diff on failure."""
+def _diff_against_golden(produced_path: Path, label: str, golden_path: Path = GOLDEN) -> None:
+    """Assert produced output matches the given golden, with a useful diff on failure."""
     produced = produced_path.read_bytes()
-    golden = GOLDEN.read_bytes()
+    golden = golden_path.read_bytes()
     if produced == golden:
         return
     produced_lines = produced.decode("utf-8", errors="replace").splitlines()
     golden_lines = golden.decode("utf-8", errors="replace").splitlines()
     diff = "\n".join(difflib.unified_diff(
         golden_lines, produced_lines,
-        fromfile="golden", tofile=label, lineterm="", n=2,
+        fromfile=golden_path.name, tofile=label, lineterm="", n=2,
     ))
     pytest.fail(
-        f"{label} diverged from golden. If this is intentional (Docling upgrade or "
-        f"deliberate behavior change), regenerate with:\n"
+        f"{label} diverged from {golden_path.name}. If this is intentional "
+        f"(Docling upgrade or deliberate behavior change), regenerate with:\n"
         f"  ./venv/bin/python convert.py tests/fixtures/sample.pdf "
-        f"-o tests/fixtures/sample.golden.md\n\n"
+        f"-o tests/fixtures/{golden_path.name}\n\n"
         f"Diff (first 60 lines):\n{diff[:6000]}"
     )
 
@@ -102,14 +103,15 @@ def test_new_matches_golden(tmp_path):
 
 
 def test_legacy_matches_golden(tmp_path):
-    """The frozen legacy snapshot must also match the golden. This is a sanity
-    check against accidental drift in the snapshot itself: if someone edits
-    `tests/fixtures/legacy_pdf_to_markdown.py`, this test catches it. Together
-    with test_new_matches_golden, both code paths are pinned to the same
-    reference output, so the migration claim of byte-identity is durable
-    even when Docling versions change."""
+    """The frozen legacy snapshot must match ITS OWN pinned golden.
+
+    The snapshot is frozen forever, so it gets a frozen reference. This
+    catches accidental edits to `tests/fixtures/legacy_pdf_to_markdown.py`.
+    It deliberately no longer shares a golden with the maintained path:
+    that path now applies markdown cleanup and outline-based heading levels,
+    which the snapshot does not and never will."""
     produced = _convert_via_legacy(tmp_path)
-    _diff_against_golden(produced, "legacy snapshot")
+    _diff_against_golden(produced, "legacy snapshot", LEGACY_GOLDEN)
 
 
 def test_fixture_unchanged_after_conversion(tmp_path):
