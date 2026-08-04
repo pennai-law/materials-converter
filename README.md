@@ -158,6 +158,8 @@ On tested documents:
 - Two entries (0.3%) were not located and fall back to their parent section; no text is lost
 - False matches are suppressed by three constraints — a page window, strictly forward-only matching, and requiring a candidate's trailing text to look like a page number rather than prose. They are not eliminated: a heading whose text also opens a body paragraph on the same page can still mismatch.
 
+The 99.7% figure was measured on a book whose page labels equal its physical page numbers. That won't hold for every PDF: page markers in the output carry the PDF's page *labels* (roman-numeral front matter, chapter-restart numbering, `A-1` prefixes), while outline entries carry *physical* page indices. When a document's labels diverge from its physical pages, those are two different coordinate systems and the match rate drops. This degrades safely — unmatched headings stay flat rather than corrupting anything, no text is lost — and is visible in the conversion report's `Outline: N/M leveled` line.
+
 ### Extract Images
 
 ```bash

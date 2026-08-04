@@ -23,7 +23,7 @@ import fitz
 OutlineEntry = Tuple[int, str, int]  # (level, title, 1-based page)
 
 _PAGE_MARKER_RE = re.compile(r"^<!--\s*Page\s+(\d+)\s*-->\s*$")
-_HEADING_PREFIX_RE = re.compile(r"^#{1,6}\s*")
+_HEADING_PREFIX_RE = re.compile(r"^#{1,6}(?:[ \t]+|$)")
 _TRAILING_FOOTNOTE_RE = re.compile(r"\s+\d+\s*[a-z]?$")
 _LEADING_ENUM_RE = re.compile(r"^(?:\d+|[a-z]|[ivxlc]+)\s+")
 # After normalize(), dot leaders collapse to spaces and page numbers to digits.
@@ -121,12 +121,17 @@ def locate_entries(
 
     # Pass 1: strict, monotonic.
     for level, title, page in toc:
+        if page < 1:
+            matches.append(None)   # pass 1: unresolvable bookmark destination
+            continue
         target = normalize(title)
         found = None
         if target:
             for i in range(cursor, len(lines)):
                 if abs(page_of[i] - page) > window:
                     continue
+                if lines[i].lstrip().startswith("|"):
+                    continue  # printed contents rows render as table rows
                 cand = normalize(_candidate_text(lines[i]))
                 if not cand:
                     continue
@@ -153,12 +158,16 @@ def locate_entries(
         if lo >= hi:
             continue
         _level, title, page = toc[idx]
+        if page < 1:
+            continue  # pass 2: unresolvable bookmark destination
         target = loose(title)
         if len(target) < 5:
             continue
         for i in range(lo, hi):
             if abs(page_of[i] - page) > window:
                 continue
+            if lines[i].lstrip().startswith("|"):
+                continue  # printed contents rows render as table rows
             cand = loose(_candidate_text(lines[i]))
             if len(cand) < 5:
                 continue
