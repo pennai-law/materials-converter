@@ -57,3 +57,78 @@ class TestBuildPageMap:
 
     def test_no_markers_at_all(self):
         assert build_page_map(["a", "b"]) == [0, 0]
+
+
+from materials.formats.pdf_outline import locate_entries
+
+
+def _lines(*rows):
+    return list(rows)
+
+
+class TestLocateEntries:
+    def test_matches_headings_in_order(self):
+        lines = _lines(
+            "<!-- Page 1 -->", "## Alpha", "body",
+            "<!-- Page 2 -->", "## Beta", "body",
+        )
+        toc = [(1, "Alpha", 1), (1, "Beta", 2)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [1, 4]
+
+    def test_matches_plain_text_not_just_headings(self):
+        # Docling renders chapter titles as body text, not '##'.
+        lines = _lines("<!-- Page 1 -->", "CHAPTER 1: Beginnings", "body")
+        toc = [(1, "CHAPTER 1: Beginnings", 1)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [1]
+
+    def test_ignores_printed_toc_via_page_window(self):
+        # 'Alpha' appears in the book's printed TOC on page 2 and for real on
+        # page 40. The outline says page 40, so only that one may match.
+        lines = _lines(
+            "<!-- Page 2 -->", "| Alpha......... | 40 |",
+            "<!-- Page 40 -->", "## Alpha", "body",
+        )
+        toc = [(1, "Alpha", 40)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [3]
+
+    def test_unmatched_entry_is_none(self):
+        lines = _lines("<!-- Page 1 -->", "## Alpha")
+        toc = [(1, "Alpha", 1), (2, "Missing Heading", 1)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [1, None]
+
+    def test_results_are_strictly_increasing(self):
+        lines = _lines(
+            "<!-- Page 1 -->", "## Alpha", "## Beta", "## Alpha",
+        )
+        toc = [(1, "Alpha", 1), (1, "Beta", 1)]
+        got = [i for i in locate_entries(toc, lines, build_page_map(lines)) if i is not None]
+        assert got == sorted(got)
+
+    def test_entity_escaped_heading_matches(self):
+        lines = _lines("<!-- Page 1 -->", "## Tenure &amp; Promotion")
+        toc = [(1, "Tenure & Promotion", 1)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [1]
+
+    def test_recovery_pass_finds_entry_after_cursor_overshoot(self):
+        # Docling emitted the chapter heading AFTER its own first section.
+        # Strict matching locks 'Intro' out; the bounded recovery pass finds it.
+        lines = _lines(
+            "<!-- Page 5 -->",
+            "## A. Intro",          # line 1 - really belongs to Chapter 16
+            "body",
+            "## CHAPTER 16: End",   # line 3 - emitted late by Docling
+            "more",
+        )
+        toc = [(1, "CHAPTER 16: End", 5), (2, "A. Intro", 5)]
+        got = locate_entries(toc, lines, build_page_map(lines))
+        assert got[0] == 3          # chapter matched strictly
+        assert got[1] is None       # 'A. Intro' precedes it; order forbids a match
+
+    def test_recovery_matches_when_span_allows(self):
+        lines = _lines(
+            "<!-- Page 5 -->", "## CHAPTER 16: End", "## Strengths Research", "tail",
+        )
+        # 'a) Strengths' only matches after enumerator-stripping (loose pass).
+        toc = [(1, "CHAPTER 16: End", 5), (2, "a) Strengths", 5)]
+        got = locate_entries(toc, lines, build_page_map(lines))
+        assert got == [1, 2]
