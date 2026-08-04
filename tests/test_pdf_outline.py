@@ -151,7 +151,7 @@ class TestLocateEntries:
         assert locate_entries(toc, lines, build_page_map(lines)) == [1]
 
 
-from materials.formats.pdf_outline import apply_heading_levels
+from materials.formats.pdf_outline import apply_heading_levels, extract_outline
 
 
 class TestApplyHeadingLevels:
@@ -219,3 +219,21 @@ class TestApplyHeadingLevels:
         _out, stats = apply_heading_levels(text, "x.pdf")
         assert stats["outline_located"] == 1
         assert stats["outline_unlocated"] == 1
+
+
+from pathlib import Path
+
+FIXTURE_OUTLINE = Path(__file__).resolve().parent / "fixtures" / "sample_outline.pdf"
+
+
+class TestRealFixture:
+    def test_extract_outline_reads_real_bookmarks(self):
+        toc = extract_outline(str(FIXTURE_OUTLINE))
+        assert [lvl for lvl, _t, _p in toc] == [1, 2, 3, 1]
+        assert toc[0][1] == "CHAPTER 1: Beginnings"
+
+    def test_sample_pdf_has_no_outline(self):
+        # Guards the golden-file assumption: outline work must be a no-op on
+        # the pinned fixture, or test_new_matches_golden breaks.
+        plain = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
+        assert extract_outline(str(plain)) == []
