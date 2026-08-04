@@ -167,3 +167,69 @@ def locate_entries(
                 break
 
     return matches
+
+
+def apply_heading_levels(
+    md_text: str,
+    pdf_path: str,
+    logger: Optional[logging.Logger] = None,
+) -> Tuple[str, Dict]:
+    """Rewrite heading levels using the PDF's outline tree.
+
+    No-ops (returning the text unchanged) when the PDF has no outline.
+    """
+    toc = extract_outline(pdf_path)
+    stats: Dict = {
+        "outline_entries": len(toc),
+        "outline_located": 0,
+        "outline_unlocated": 0,
+    }
+    if not toc:
+        return md_text, stats
+
+    lines = md_text.split("\n")
+    page_of = build_page_map(lines)
+    matches = locate_entries(toc, lines, page_of)
+
+    level_at = {}
+    title_at = {}
+    for entry_idx, line_idx in enumerate(matches):
+        if line_idx is not None:
+            level_at[line_idx] = toc[entry_idx][0]
+            title_at[line_idx] = toc[entry_idx][1].strip()
+
+    stats["outline_located"] = len(level_at)
+    stats["outline_unlocated"] = len(toc) - len(level_at)
+
+    if logger and stats["outline_unlocated"]:
+        for entry_idx, line_idx in enumerate(matches):
+            if line_idx is None:
+                lvl, title, page = toc[entry_idx]
+                logger.debug(
+                    "Outline entry not found in markdown (L%d p%d): %s",
+                    lvl, page, title,
+                )
+
+    out: List[str] = []
+    current_level = 1
+    for i, line in enumerate(lines):
+        if i in level_at:
+            current_level = level_at[i]
+            out.append("#" * min(current_level + 1, 6) + " " + title_at[i])
+        elif _HEADING_PREFIX_RE.match(line):
+            body = _candidate_text(line)
+            if not body:
+                out.append(line)  # empty headings are mdclean's job
+            else:
+                # Not in the outline: nest it under the enclosing section
+                # rather than letting it compete with chapters at '##'.
+                out.append("#" * min(current_level + 2, 6) + " " + body)
+        else:
+            out.append(line)
+
+    if logger:
+        logger.info(
+            "Outline headings: %d/%d located",
+            stats["outline_located"], stats["outline_entries"],
+        )
+    return "\n".join(out), stats

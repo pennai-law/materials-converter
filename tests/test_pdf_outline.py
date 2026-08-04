@@ -149,3 +149,73 @@ class TestLocateEntries:
         lines = _lines("<!-- Page 5 -->", "Alpha.......... 40")
         toc = [(1, "Alpha", 5)]
         assert locate_entries(toc, lines, build_page_map(lines)) == [1]
+
+
+from materials.formats.pdf_outline import apply_heading_levels
+
+
+class TestApplyHeadingLevels:
+    def test_noop_without_outline(self, tmp_path, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [])
+        text = "## Flat\n\nbody\n"
+        out, stats = apply_heading_levels(text, "irrelevant.pdf")
+        assert out == text
+        assert stats["outline_entries"] == 0
+
+    def test_assigns_levels_from_outline(self, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [
+            (1, "CHAPTER 1: Start", 1),
+            (2, "A. First", 1),
+            (3, "1. Deeper", 1),
+        ])
+        text = (
+            "<!-- Page 1 -->\n"
+            "CHAPTER 1: Start\n"
+            "## A. First\n"
+            "## 1. Deeper\n"
+        )
+        out, stats = apply_heading_levels(text, "x.pdf")
+        assert "## CHAPTER 1: Start" in out
+        assert "### A. First" in out
+        assert "#### 1. Deeper" in out
+        assert stats["outline_located"] == 3
+
+    def test_demotes_headings_absent_from_outline(self, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [
+            (1, "Glossary", 1),
+        ])
+        text = "<!-- Page 1 -->\n## Glossary\n## Hallucination\n"
+        out, _ = apply_heading_levels(text, "x.pdf")
+        # Glossary is outline level 1 -> '##'; a term under it must nest at
+        # '###', not compete with chapters at '##'.
+        assert "## Glossary" in out
+        assert "### Hallucination" in out
+
+    def test_caps_at_six_hashes(self, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [(5, "Deep", 1)])
+        text = "<!-- Page 1 -->\n## Deep\n## Orphan\n"
+        out, _ = apply_heading_levels(text, "x.pdf")
+        assert "###### Deep" in out
+        assert "###### Orphan" in out  # capped, not '########'
+
+    def test_preserves_page_markers_and_body(self, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [(1, "Alpha", 1)])
+        text = "<!-- Page 1 -->\n## Alpha\n\nbody text\n"
+        out, _ = apply_heading_levels(text, "x.pdf")
+        assert "<!-- Page 1 -->" in out
+        assert "body text" in out
+
+    def test_reports_unlocated(self, monkeypatch):
+        import materials.formats.pdf_outline as mod
+        monkeypatch.setattr(mod, "extract_outline", lambda p: [
+            (1, "Alpha", 1), (2, "Nowhere", 1),
+        ])
+        text = "<!-- Page 1 -->\n## Alpha\n"
+        _out, stats = apply_heading_levels(text, "x.pdf")
+        assert stats["outline_located"] == 1
+        assert stats["outline_unlocated"] == 1
