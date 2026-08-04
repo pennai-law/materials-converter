@@ -14,8 +14,6 @@
 
 This preface page is intended to test page-label translation: the visible page label should be 'i' (Roman numeral), even though the page index is 0.
 
-## 
-
 <!-- Page 1 -->
 
 Chapter 1: Introduction
