@@ -132,3 +132,20 @@ class TestLocateEntries:
         toc = [(1, "CHAPTER 16: End", 5), (2, "a) Strengths", 5)]
         got = locate_entries(toc, lines, build_page_map(lines))
         assert got == [1, 2]
+
+    def test_rejects_body_prose_that_extends_a_heading(self):
+        # 'The Promise of AI' starts with the heading text and is only a few
+        # characters longer, so a length-based tail check would false-match it.
+        # Only a dot-leader/page-number tail may match.
+        lines = _lines(
+            "<!-- Page 5 -->",
+            "The Promise of AI",       # body prose - must NOT match
+            "## The Promise",          # the real heading - must match
+        )
+        toc = [(1, "The Promise", 5)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [2]
+
+    def test_still_matches_dot_leader_contents_line(self):
+        lines = _lines("<!-- Page 5 -->", "Alpha.......... 40")
+        toc = [(1, "Alpha", 5)]
+        assert locate_entries(toc, lines, build_page_map(lines)) == [1]

@@ -26,6 +26,11 @@ _PAGE_MARKER_RE = re.compile(r"^<!--\s*Page\s+(\d+)\s*-->\s*$")
 _HEADING_PREFIX_RE = re.compile(r"^#{1,6}\s*")
 _TRAILING_FOOTNOTE_RE = re.compile(r"\s+\d+\s*[a-z]?$")
 _LEADING_ENUM_RE = re.compile(r"^(?:\d+|[a-z]|[ivxlc]+)\s+")
+# After normalize(), dot leaders collapse to spaces and page numbers to digits.
+# Requiring the tail to be digits/whitespace only is what separates a real
+# "Heading......... 40" contents line from body prose that merely starts with
+# the heading text ("The Promise of AI").
+_LEADER_TAIL_RE = re.compile(r"[\d\s]*")
 
 
 def extract_outline(pdf_path: str) -> List[OutlineEntry]:
@@ -125,8 +130,11 @@ def locate_entries(
                 cand = normalize(_candidate_text(lines[i]))
                 if not cand:
                     continue
-                # Exact, or the line is the heading plus dot-leader junk.
-                if cand == target or (cand.startswith(target) and len(cand) - len(target) < 15):
+                # Exact, or the line is the heading plus dot-leader/page-number tail.
+                if cand == target or (
+                    cand.startswith(target)
+                    and _LEADER_TAIL_RE.fullmatch(cand[len(target):].strip())
+                ):
                     found = i
                     break
         matches.append(found)
