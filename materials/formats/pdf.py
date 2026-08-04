@@ -1488,7 +1488,15 @@ def postprocess_markdown(
     md_text = drop_empty_headings(md_text)
     stats: Dict = {}
     if outline_headings and have_page_markers:
-        md_text, stats = apply_heading_levels(md_text, pdf_path, logger=logger)
+        try:
+            md_text, stats = apply_heading_levels(md_text, pdf_path, logger=logger)
+        except Exception as exc:
+            if logger:
+                logger.warning(
+                    "Outline heading reconstruction skipped (%s); "
+                    "markdown is unchanged", exc,
+                )
+            stats = {}
     return md_text, stats
 
 

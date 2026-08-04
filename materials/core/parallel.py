@@ -74,6 +74,10 @@ def parallel_convert_files(
     logger = logging.getLogger("pdf_converter")
     converter_class_path = f"{converter_class.__module__}.{converter_class.__name__}"
 
+    # Explicit allow-list, not **vars(options) — this must be extended by hand
+    # whenever ConversionOptions gains a field. An omission fails silently: the
+    # worker rebuilds ConversionOptions(**options_kwargs) and the missing field
+    # just reverts to its dataclass default, with no error or warning.
     options_kwargs = {
         "output_path": options.output_path,
         "page_markers": options.page_markers,
@@ -89,6 +93,7 @@ def parallel_convert_files(
         "keep_images": options.keep_images,
         "notes_only": options.notes_only,
         "strip_html_noise": options.strip_html_noise,
+        "outline_headings": options.outline_headings,
         "workers": 1,
     }
 
