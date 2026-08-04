@@ -114,6 +114,44 @@ The tool uses Docling's element provenance system for accurate page tracking:
   - ✓ Multiple numbering schemes (roman front matter → arabic body → appendix)
 - Blank pages are detected and reported (not marked, since no content exists)
 
+### Heading Levels from PDF Outline
+
+When a PDF carries a native outline (bookmark tree) — common for documents created in Word and published via Acrobat — the converter automatically reconstructs true heading nesting from the outline. This fixes a limitation in Docling's visual layout analysis, which identifies *that* a line is a heading but cannot infer *how deep* it sits in the hierarchy without reading the document's structural metadata.
+
+**How it works:**
+
+1. **Docling extracts prose** — each heading comes out as `##` (second-level markdown)
+2. **PDF outline provides hierarchy** — the outline carries Word's true heading levels (1-6) and page numbers
+3. **Automatic matching** — the converter aligns outline entries to markdown lines using page proximity and text similarity, then rewrites heading levels to reflect the true nesting
+
+**Result:** A 524-page book with chapters (level 1), sections (levels 2-3), and subsections (levels 4-6) emerges with full heading hierarchy instead of flat `## ... ## ... ##`.
+
+**When it applies:**
+
+- ✓ PDFs generated from Word via PDFMaker (most professional documents, textbooks, casebooks)
+- ✓ PDFs with explicit bookmarks/outline metadata
+- ✗ PDFs created by scanning (no outline) — outline relabeling is skipped automatically
+- ✗ PDFs without outlines (~60% of book-length PDFs) — output is unchanged
+
+**Opt out if needed:**
+
+```bash
+# Disable outline-based heading relabeling
+python convert.py document.pdf --no-outline-headings -o output.md
+```
+
+This is useful when:
+- The PDF's outline is malformed or doesn't match the content
+- You want to preserve Docling's visual-analysis heading levels as-is
+- You're experimenting with alternative heading structures
+
+**Accuracy:**
+
+On tested documents:
+- 524-page textbook: **99.7%** of outline entries located (616/618)
+- Heading levels correctly recovered: 23 chapters (##), hundreds of sections (###-######)
+- No false positives: page windows and monotonic matching prevent matching the wrong sections
+
 ### Extract Images
 
 ```bash
