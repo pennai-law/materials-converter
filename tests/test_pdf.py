@@ -1,14 +1,17 @@
 """PDF conversion tests — guards against regressions in the byte-identical
 output that Stage 1's refactor was specified to preserve.
 
-Pinned-golden pattern: the canonical reference is `tests/fixtures/sample.golden.md`,
-generated once on Docling 2.65.0 at Stage 1 completion and committed. Both the
-new `convert.py` path and the frozen legacy snapshot must produce output that
-matches the golden. When Docling upgrades and produces different output, the
-golden is regenerated as a deliberate, reviewable acceptance — turning a
-silent identity comparison into an explicit regression guard.
+Pinned-golden pattern: two goldens, each pinned to a different code path.
+`tests/fixtures/sample.golden.md` tracks the maintained `convert.py` path,
+generated once on Docling 2.65.0 at Stage 1 completion and committed. When
+Docling upgrades or a deliberate output change lands, it is regenerated as
+a reviewable acceptance — turning a silent identity comparison into an
+explicit regression guard. `tests/fixtures/sample.legacy.golden.md` tracks
+the frozen legacy snapshot (`tests/fixtures/legacy_pdf_to_markdown.py`) and
+is itself frozen: it is never regenerated. A divergence there means the
+snapshot was edited, not that the golden is stale — revert the edit instead.
 
-Regenerate the golden with:
+Regenerate the maintained golden with:
     ./venv/bin/python convert.py tests/fixtures/sample.pdf -o tests/fixtures/sample.golden.md
 """
 import difflib
@@ -71,12 +74,30 @@ def _convert_via_new(tmpdir: Path) -> Path:
     return out
 
 
-def _diff_against_golden(produced_path: Path, label: str, golden_path: Path = GOLDEN) -> None:
-    """Assert produced output matches the given golden, with a useful diff on failure."""
+def _diff_against_golden(
+    produced_path: Path,
+    label: str,
+    golden_path: Path = GOLDEN,
+    remedy: str = None,
+) -> None:
+    """Assert produced output matches the given golden, with a useful diff on failure.
+
+    `remedy` is the guidance printed on failure. It differs per golden: the
+    maintained path's golden is regenerated on a deliberate change, while the
+    legacy golden is frozen and must never be regenerated — a divergence there
+    means the frozen snapshot itself was edited.
+    """
     produced = produced_path.read_bytes()
     golden = golden_path.read_bytes()
     if produced == golden:
         return
+    if remedy is None:
+        remedy = (
+            "If this is intentional (Docling upgrade or deliberate behavior "
+            "change), regenerate with:\n"
+            "  ./venv/bin/python convert.py tests/fixtures/sample.pdf "
+            f"-o tests/fixtures/{golden_path.name}"
+        )
     produced_lines = produced.decode("utf-8", errors="replace").splitlines()
     golden_lines = golden.decode("utf-8", errors="replace").splitlines()
     diff = "\n".join(difflib.unified_diff(
@@ -84,10 +105,7 @@ def _diff_against_golden(produced_path: Path, label: str, golden_path: Path = GO
         fromfile=golden_path.name, tofile=label, lineterm="", n=2,
     ))
     pytest.fail(
-        f"{label} diverged from {golden_path.name}. If this is intentional "
-        f"(Docling upgrade or deliberate behavior change), regenerate with:\n"
-        f"  ./venv/bin/python convert.py tests/fixtures/sample.pdf "
-        f"-o tests/fixtures/{golden_path.name}\n\n"
+        f"{label} diverged from {golden_path.name}.\n{remedy}\n\n"
         f"Diff (first 60 lines):\n{diff[:6000]}"
     )
 
@@ -111,7 +129,16 @@ def test_legacy_matches_golden(tmp_path):
     that path now applies markdown cleanup and outline-based heading levels,
     which the snapshot does not and never will."""
     produced = _convert_via_legacy(tmp_path)
-    _diff_against_golden(produced, "legacy snapshot", LEGACY_GOLDEN)
+    _diff_against_golden(
+        produced, "legacy snapshot", LEGACY_GOLDEN,
+        remedy=(
+            "DO NOT regenerate this golden. The legacy snapshot is frozen, so "
+            "this test can only fail if tests/fixtures/legacy_pdf_to_markdown.py "
+            "was edited — revert that edit instead. Regenerating this file from "
+            "convert.py would overwrite the frozen reference with the maintained "
+            "path's output and destroy what this test guards."
+        ),
+    )
 
 
 def test_fixture_unchanged_after_conversion(tmp_path):
