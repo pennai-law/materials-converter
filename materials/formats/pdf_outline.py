@@ -89,3 +89,73 @@ def build_page_map(lines: List[str]) -> List[int]:
             current = int(m.group(1))
         page_of.append(current)
     return page_of
+
+
+def _candidate_text(line: str) -> str:
+    """Strip markdown heading hashes so a heading and the same text as a
+    plain paragraph compare equal."""
+    return _HEADING_PREFIX_RE.sub("", line.strip())
+
+
+def locate_entries(
+    toc: List[OutlineEntry],
+    lines: List[str],
+    page_of: List[int],
+    window: int = 4,
+) -> List[Optional[int]]:
+    """Find the markdown line index for each outline entry.
+
+    Two constraints keep this honest:
+      * page window - a match must sit within `window` pages of the page the
+        outline claims, which excludes the book's own printed contents table.
+      * monotonic order - matches may only advance, which excludes repeated
+        section names like 'a) Strengths' recurring under every platform.
+    """
+    matches: List[Optional[int]] = []
+    cursor = 0
+
+    # Pass 1: strict, monotonic.
+    for level, title, page in toc:
+        target = normalize(title)
+        found = None
+        if target:
+            for i in range(cursor, len(lines)):
+                if abs(page_of[i] - page) > window:
+                    continue
+                cand = normalize(_candidate_text(lines[i]))
+                if not cand:
+                    continue
+                # Exact, or the line is the heading plus dot-leader junk.
+                if cand == target or (cand.startswith(target) and len(cand) - len(target) < 15):
+                    found = i
+                    break
+        matches.append(found)
+        if found is not None:
+            cursor = found + 1
+
+    # Pass 2: recovery, bounded by already-matched neighbours so document
+    # order is preserved by construction.
+    for idx, existing in enumerate(matches):
+        if existing is not None:
+            continue
+        lo = next((matches[j] + 1 for j in range(idx - 1, -1, -1)
+                   if matches[j] is not None), 0)
+        hi = next((matches[j] for j in range(idx + 1, len(matches))
+                   if matches[j] is not None), len(lines))
+        if lo >= hi:
+            continue
+        _level, title, page = toc[idx]
+        target = loose(title)
+        if len(target) < 5:
+            continue
+        for i in range(lo, hi):
+            if abs(page_of[i] - page) > window:
+                continue
+            cand = loose(_candidate_text(lines[i]))
+            if len(cand) < 5:
+                continue
+            if cand == target or cand.startswith(target) or target.startswith(cand):
+                matches[idx] = i
+                break
+
+    return matches
