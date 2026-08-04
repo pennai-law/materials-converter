@@ -49,7 +49,7 @@ def normalize(s: str) -> str:
     """
     s = html.unescape(s)
     s = unicodedata.normalize("NFKD", s)
-    for a, b in (("'", "'"), ("'", "'"), (""", '"'), (""", '"')):
+    for a, b in (("’", "'"), ("‘", "'"), ("”", '"'), ("“", '"')):
         s = s.replace(a, b)
     s = re.sub(r"[‐-―]", "-", s)
     s = re.sub(r"[^a-zA-Z0-9]+", " ", s.lower())
