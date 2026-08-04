@@ -10,7 +10,7 @@ from materials.formats.pdf_outline import (
 
 class TestNormalize:
     def test_unifies_smart_quotes(self):
-        assert normalize("Can't Do") == normalize("Can't Do")
+        assert normalize("Can’t Do") == normalize("Can't Do")
 
     def test_unifies_dashes(self):
         assert normalize("What I Left Out — and Why") == \
