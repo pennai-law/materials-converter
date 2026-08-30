@@ -60,6 +60,10 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="OCR for scanned PDFs (slow; PDF only)")
     parser.add_argument("--no-page-markers", dest="page_markers", action="store_false",
                         help="Disable position markers (enabled by default)")
+    parser.add_argument("--no-outline-headings", dest="outline_headings",
+                        action="store_false",
+                        help="PDF: don't rebuild heading levels from the PDF outline "
+                             "(default: rebuild when the PDF has one)")
     parser.add_argument(
         "--strip-html-noise",
         action="store_true",
@@ -140,6 +144,7 @@ def _dispatch_single(input_path: str, args: argparse.Namespace) -> int:
         keep_images=args.keep_images,
         notes_only=args.notes_only,
         workers=args.workers,
+        outline_headings=args.outline_headings,
     )
     result = converter.convert(input_path, options)
     if result.status != "success":
@@ -180,6 +185,7 @@ def _dispatch_batch(input_dir: str, args: argparse.Namespace) -> int:
         notes_only=args.notes_only,
         strip_html_noise=args.strip_html_noise,
         workers=args.workers,
+        outline_headings=args.outline_headings,
     )
 
     total_success = 0
